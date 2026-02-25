@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.47.0-jammy
+FROM mcr.microsoft.com/playwright:v1.58.2-jammy
 
 WORKDIR /app
 
@@ -6,7 +6,6 @@ COPY package.json package-lock.json* ./
 RUN npm ci || npm install
 
 COPY . .
-
 ENV NODE_ENV=production
 ENV PORT=3000
 EXPOSE 3000
