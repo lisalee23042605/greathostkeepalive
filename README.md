@@ -1,47 +1,23 @@
-# GreatHost Auto Renew Bot (Playwright + Railway Cron)
+# GreatHost Renew Dashboard (Railway Web + Playwright)
 
-定时打开 GreatHost 合同详情页，读取 **Accumulated time**，在满足条件时自动点击 **Renew**（+12 hours）。
+一个可部署到 Railway 的 Web 服务：  
+- 定时登录 GreatHost  
+- 打开合同页读取 **Accumulated time**（累计小时）  
+- 当满足条件时自动点击 **Renew**  
+- Railway 会分配域名，用网页实时查看：剩余小时数 / 在线状态 / 最近日志
+
+---
 
 ## 功能
-- ✅ 自动登录
-- ✅ 打开合同页（Renewal Information 卡片）
-- ✅ 读取 `Accumulated time`（小时数）
-- ✅ 当累计小时 **>= 阈值（默认 100h）** 时不点击
-- ✅ 当按钮处于冷却（显示 `Wait xx min`）时不点击
-- ✅ 其余情况点击 `Renew` 按钮
 
-> GreatHost 上限是 120h；建议阈值设为 100h 或更保守（如 108/110）。
-
----
-
-## 环境变量
-
-### 必填
-| 变量名 | 说明 | 示例 |
-|---|---|---|
-| `LOGIN_URL` | 登录页 URL | `https://greathost.es/login` |
-| `PANEL_URL` | 合同详情页 URL（有 Renew 的页面） | `https://greathost.es/contracts/<id>` |
-| `USERNAME` | 登录邮箱/用户名 | `your@email.com` |
-| `PASSWORD` | 登录密码 | `your_password` |
-
-### 可选
-| 变量名 | 默认值 | 说明 |
-|---|---:|---|
-| `SKIP_IF_GE_HOURS` | `100` | 当累计小时 >= 该值时不点击 Renew |
-| `HEADLESS` | `true` | `false` 时可本地看浏览器跑（Railway 建议保持 true） |
-| `TIMEOUT_MS` | `30000` | 等待超时（毫秒） |
+- ✅ Web 看板：显示在线状态、累计小时、剩余小时、上次/下次检查时间、最近动作、最近日志
+- ✅ 定时任务：按 `CHECK_EVERY_HOURS` 周期自动检查
+- ✅ 规则：
+  - 当 **Accumulated hours >= SKIP_IF_GE_HOURS（默认 100）** → 不点 Renew
+  - 当按钮处于冷却（显示 `Wait xx min`）→ 不点 Renew
+  - 其余情况 → 点击 `Renew`
+- ✅ 手动触发：网页上点 `Run Now` 或 `POST /run`
 
 ---
 
-## 本地运行
-
-> 需要 Node.js 18+（建议 18/20）。
-
-```bash
-npm install
-export LOGIN_URL="https://greathost.es/login"
-export PANEL_URL="https://greathost.es/contracts/<id>"
-export USERNAME="xxx"
-export PASSWORD="yyy"
-export SKIP_IF_GE_HOURS="100"
-npm start
+## 目录结构
