@@ -1,10 +1,12 @@
-# GreatHost Renew Dashboard (Railway Web + Playwright)
+# GreatHost Renew Dashboard (Railway + GHCR + Playwright)
 
 一个可部署到 Railway 的 Web 服务：  
 - 定时登录 GreatHost  
 - 打开合同页读取 **Accumulated time**（累计小时）  
-- 当满足条件时自动点击 **Renew**  
-- Railway 会分配域名，用网页实时查看：剩余小时数 / 在线状态 / 最近日志
+- 满足条件时自动点击 **Renew**（+12 hours）  
+- Railway 会分配域名，用网页实时查看：剩余小时数 / 在线状态 / 最近动作 / 日志
+
+本项目使用 **Playwright 官方 Docker 基座镜像**（依赖齐全），并通过 **GitHub Actions 自动构建并推送到 GHCR**，Railway 直接从 GHCR 拉取镜像部署。
 
 ---
 
@@ -21,9 +23,17 @@
 ---
 
 ## 目录结构
+
+
 .
 ├─ package.json
-└─ server.js
+├─ server.js
+├─ Dockerfile
+├─ .dockerignore
+└─ .github/
+└─ workflows/
+└─ docker-ghcr.yml
+
 
 ---
 
@@ -43,84 +53,111 @@
 | 变量名 | 默认值 | 说明 |
 |---|---:|---|
 | `CHECK_EVERY_HOURS` | `3` | 每隔几小时检查一次（建议 3 或 6） |
-| `SKIP_IF_GE_HOURS` | `100` | 累计小时 >= 该值时跳过 Renew |
-| `MAX_HOURS` | `120` | 上限（GreatHost 通常是 120h） |
+| `SKIP_IF_GE_HOURS` | `100` | 累计小时 >= 该值时跳过 Renew（GreatHost 上限通常 120h） |
+| `MAX_HOURS` | `120` | 上限小时数，用于计算 Remaining |
 
 ### 可选（排错/兼容）
 
 | 变量名 | 默认值 | 说明 |
 |---|---:|---|
-| `HEADLESS` | `true` | `false` 时本地可看到浏览器（Railway 建议 true） |
+| `HEADLESS` | `true` | Railway 建议保持 true |
 | `TIMEOUT_MS` | `30000` | 页面等待超时（毫秒） |
-| `PORT` | `3000` | 监听端口（Railway 一般会自动注入） |
+| `PORT` | `3000` | 监听端口（Railway 通常自动注入） |
 
 ---
 
-## 本地运行
+## Web 页面与 API
 
-需要 Node.js 18+（建议 18/20）。
+- `GET /`  
+  Web 看板（自动每 20 秒刷新一次）
+
+- `GET /status`  
+  JSON 状态（适合外部监控/探针）
+
+- `POST /run`  
+  手动触发一次检查（异步执行，立即返回 `{ ok: true }`）
+
+---
+
+## 使用 GHCR 自动构建镜像
+
+项目已包含 GitHub Actions：`.github/workflows/docker-ghcr.yml`
+
+触发方式：
+- push 到 `main` 分支会自动构建并推送镜像
+- 或在 GitHub Actions 手动点 `Run workflow`
+
+镜像地址格式：
+- `ghcr.io/<GitHub用户名>/<仓库名>:latest`
+- `ghcr.io/<GitHub用户名>/<仓库名>:sha-xxxxxxx`
+
+---
+
+## Railway 部署（从 GHCR 镜像）
+
+1. 在 Railway 新建 Service → 选择 **Deploy from Image**
+2. 填入镜像地址：  
+   `ghcr.io/<GitHub用户名>/<仓库名>:latest`
+3. 在 Railway 的 Variables 中设置环境变量（至少四个必填）：
+   - `LOGIN_URL=https://greathost.es/login`
+   - `PANEL_URL=https://greathost.es/contracts/<id>`
+   - `USERNAME=...`
+   - `PASSWORD=...`
+   - （推荐）`CHECK_EVERY_HOURS=3`、`SKIP_IF_GE_HOURS=100`、`MAX_HOURS=120`
+4. 部署成功后 Railway 会给你域名，打开：
+   - `/` 看板
+   - `/status` JSON
+
+### GHCR 拉取权限提示
+- 如果你的仓库/镜像是 private，Railway 可能无法拉取。
+- 最简单做法：在 GHCR 的包设置里将该 package 设为 **Public**（或仓库保持 public）。
+
+---
+
+## 本地运行（可选）
+
+需要 Docker。
 
 ```bash
-npm install
+docker build -t greathost-renew-web:latest .
+docker run --rm -p 3000:3000 \
+  -e LOGIN_URL="https://greathost.es/login" \
+  -e PANEL_URL="https://greathost.es/contracts/<contract_id>" \
+  -e USERNAME="xxx" \
+  -e PASSWORD="yyy" \
+  -e CHECK_EVERY_HOURS="3" \
+  -e SKIP_IF_GE_HOURS="100" \
+  -e MAX_HOURS="120" \
+  greathost-renew-web:latest
 
-export LOGIN_URL="https://greathost.es/login"
-export PANEL_URL="https://greathost.es/contracts/<contract_id>"
-export USERNAME="xxx"
-export PASSWORD="yyy"
-
-# 可选
-export CHECK_EVERY_HOURS="3"
-export SKIP_IF_GE_HOURS="100"
-export MAX_HOURS="120"
-
-npm start
-启动后访问：
+访问：
 
 http://localhost:3000/
- （网页看板）
 
-http://localhost:3000/status
- （JSON 状态）
-Railway 部署
-1) 新建项目并连接 GitHub Repo
+安全提示
 
-把代码推到 GitHub，然后在 Railway 创建新项目并连接仓库。
+不要把 USERNAME / PASSWORD 写进代码或提交到 GitHub
 
-2) 配置环境变量
+只通过 Railway Variables / 本地环境变量注入
 
-在 Railway -> Variables 中添加：
+建议用独立账号，避免主账号风险
 
-LOGIN_URL
+常见问题
+1) 看板显示 error / hours 为 -
 
-PANEL_URL
+去 /status 查看 lastError 和 lastLog，通常是：
 
-USERNAME
+环境变量缺失
 
-PASSWORD
+登录被重定向回 /login
 
-（推荐）CHECK_EVERY_HOURS、SKIP_IF_GE_HOURS、MAX_HOURS
+页面文案/DOM 变化导致定位不到 Renewal Information / Accumulated time
 
-3) 运行方式
+2) 页面 DOM 变化后无法定位
 
-这是 Web Service（常驻），不需要 Cron Job。
+脚本主要依赖右侧卡片文字：
 
-Start Command：npm start
+Renewal Information
 
-部署成功后，Railway 会提供域名，直接访问：
-
-/：看板
-
-/status：JSON
-
-点击 Run Now 可立即触发一次检查/续期
-
-API
-
-GET /
-Web 看板
-
-GET /status
-JSON 状态（可用于外部监控/探针）
-
-POST /run
-手动触发一次检查（返回 { ok: true }，任务异步执行）
+Accumulated time
+如文案变化，需要同步修改 server.js 中对应定位文本。
