@@ -1,0 +1,12 @@
+{
+  "name": "greathost-renew-bot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node renew.js",
+    "postinstall": "npx playwright install --with-deps chromium"
+  },
+  "dependencies": {
+    "playwright": "^1.47.0"
+  }
+}
